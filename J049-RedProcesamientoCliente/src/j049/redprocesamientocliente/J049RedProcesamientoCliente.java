@@ -1,6 +1,8 @@
 package j049.redprocesamientocliente;
 
 import java.io.*;
+import java.lang.management.ManagementFactory;
+import com.sun.management.OperatingSystemMXBean;
 import java.net.*;
 import java.util.concurrent.*;
 
@@ -22,6 +24,27 @@ public class J049RedProcesamientoCliente {
             int availableCores = Runtime.getRuntime().availableProcessors();
             System.out.println("Connected to Calculation Server as client with " + availableCores + " cores.");
             out.println("CORES " + availableCores);
+            
+            // Start an overall CPU load reporter thread using pure Java.
+            // This uses OperatingSystemMXBean to get the overall system CPU load.
+            new Thread(() -> {
+                OperatingSystemMXBean osBean = (OperatingSystemMXBean)
+                        ManagementFactory.getOperatingSystemMXBean();
+                while (true) {
+                    try {
+                        Thread.sleep(5000); // update every 5 seconds
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    double load = osBean.getSystemCpuLoad(); // returns a value between 0.0 and 1.0, or -1 if not available
+                    int loadPercentage = (load < 0 ? 0 : (int)(load * 100));
+                    // Send overall CPU load as: CPU_USAGE <percentage>
+                    synchronized(out) {
+                        out.println("CPU_USAGE " + loadPercentage);
+                    }
+                    System.out.println("Reported overall CPU load: " + loadPercentage + "%");
+                }
+            }).start();
             
             // Create a thread pool equal to the number of available cores.
             ExecutorService executor = Executors.newFixedThreadPool(availableCores);
@@ -58,7 +81,7 @@ public class J049RedProcesamientoCliente {
                         });
                     }
                 } else {
-                    // If the message is not a task, pause briefly.
+                    // In case the message is not a task, pause briefly.
                     Thread.sleep(100);
                 }
             }

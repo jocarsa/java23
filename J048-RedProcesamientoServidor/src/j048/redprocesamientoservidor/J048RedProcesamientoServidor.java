@@ -2,6 +2,7 @@ package j048.redprocesamientoservidor;
 
 import java.io.*;
 import java.net.*;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -45,6 +46,9 @@ public class J048RedProcesamientoServidor {
 
         // Start thread to listen for dispatcher connections.
         new Thread(new DispatcherAcceptor()).start();
+        
+        // Start a new thread to periodically print CPU usage for each connected client.
+        new Thread(new UsageMonitor()).start();
     }
 }
 
@@ -56,7 +60,7 @@ class ClientAcceptor implements Runnable {
             System.out.println("Client listener started on port " + J048RedProcesamientoServidor.CLIENT_PORT);
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                String clientId = "Client" + J048RedProcesamientoServidor.clientCounter.getAndIncrement();
+                String clientId = "Cliente" + J048RedProcesamientoServidor.clientCounter.getAndIncrement();
                 ClientHandler handler = new ClientHandler(clientSocket, clientId);
                 J048RedProcesamientoServidor.clients.put(clientId, handler);
                 new Thread(handler).start();
@@ -153,10 +157,23 @@ class DispatcherHandler implements Runnable {
 class ClientHandler implements Runnable {
     private Socket socket;
     private String clientId;
-    
+    private String clientIp;
+    // Latest per-core CPU usage in percentage (e.g., {23.0, 45.0, 10.0, 67.0})
+    private volatile double[] cpuUsages;
+
     public ClientHandler(Socket socket, String clientId) {
         this.socket = socket;
         this.clientId = clientId;
+        this.clientIp = socket.getInetAddress().toString();
+    }
+    
+    // Getters for monitor
+    public String getClientIp() {
+        return clientIp;
+    }
+    
+    public double[] getCpuUsages() {
+        return cpuUsages;
     }
     
     @Override
@@ -173,7 +190,7 @@ class ClientHandler implements Runnable {
                 String[] tokens = coresMessage.split("\\s+");
                 if (tokens.length >= 2) {
                     tempCores = Integer.parseInt(tokens[1]);
-                    System.out.println("Client " + clientId + " has " + tempCores + " cores available.");
+                    System.out.println(clientId + " has " + tempCores + " cores available.");
                 }
             } else {
                 out.println("ERROR: Expected CORES message.");
@@ -207,21 +224,30 @@ class ClientHandler implements Runnable {
                 }
             });
             
-            // Receiver thread: reads results from the client.
+            // Receiver thread: reads results and CPU usage from the client.
             Thread receiver = new Thread(() -> {
                 try {
                     String response;
                     while ((response = in.readLine()) != null) {
+                        if (response.startsWith("CPU_USAGE")) {
+                            // Expected format: CPU_USAGE <usage1> <usage2> ... <usageN>
+                            String[] tokens = response.split("\\s+");
+                            int numCores = tokens.length - 1;
+                            double[] usages = new double[numCores];
+                            for (int i = 0; i < numCores; i++) {
+                                usages[i] = Double.parseDouble(tokens[i + 1]);
+                            }
+                            cpuUsages = usages;
+                            continue; // Skip further processing for CPU usage messages.
+                        }
                         if (response.startsWith("RESULT")) {
                             String[] tokens = response.split("\\s+");
                             if (tokens.length >= 3) {
                                 int resultTaskId = Integer.parseInt(tokens[1]);
                                 double partialSum = Double.parseDouble(tokens[2]);
-                                long rangeStart = tokens.length >= 4 ? Long.parseLong(tokens[3]) : -1;
-                                long rangeEnd = tokens.length >= 5 ? Long.parseLong(tokens[4]) : -1;
+                                // Optional: if CPU usage data is included in RESULT, ignore here.
                                 J048RedProcesamientoServidor.taskResults.put(resultTaskId, partialSum);
-                                System.out.println("Received result for task " + resultTaskId + " from " + clientId +
-                                        (rangeStart != -1 ? " with range [" + rangeStart + ", " + rangeEnd + ")" : ""));
+                                System.out.println("Received result for task " + resultTaskId + " from " + clientId);
                                 tasksInFlight.decrementAndGet();
                             }
                         }
@@ -245,3 +271,40 @@ class ClientHandler implements Runnable {
     }
 }
 
+// --- UsageMonitor: prints CPU usage info for each connected client ---
+class UsageMonitor implements Runnable {
+    @Override
+    public void run() {
+        while (true) {
+            System.out.println("-------- CPU Usage for Connected Clients --------");
+            for (Map.Entry<String, ClientHandler> entry : J048RedProcesamientoServidor.clients.entrySet()) {
+                String clientId = entry.getKey();
+                ClientHandler handler = entry.getValue();
+                System.out.println(clientId + ": " + handler.getClientIp());
+                double[] usages = handler.getCpuUsages();
+                if (usages != null) {
+                    for (int i = 0; i < usages.length; i++) {
+                        // Create a simple bar with 10 segments.
+                        int bars = (int)(usages[i] / 10);
+                        StringBuilder bar = new StringBuilder();
+                        for (int j = 0; j < bars; j++) {
+                            bar.append("#");
+                        }
+                        for (int j = bars; j < 10; j++) {
+                            bar.append("-");
+                        }
+                        System.out.println("Core " + (i + 1) + ": |" + bar + "| -> " + String.format("%.0f", usages[i]) + "%");
+                    }
+                } else {
+                    System.out.println("No CPU usage data available yet.");
+                }
+                System.out.println();
+            }
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
