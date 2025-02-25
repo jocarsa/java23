@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>jocarsa | LMS</title>
+  <link rel="stylesheet" href="lms.css">
+</head>
+<body>
+
+<div class="lms-header">
+  <h1>jocarsa | LMS</h1>
+</div>
+
+<div class="lms-container">
+
+  <!-- Left Nav (we fill dynamically after login) -->
+  <nav class="lms-nav" id="lmsNav">
+  </nav>
+
+  <!-- Main Content -->
+  <div class="lms-main" id="lmsMainContent">
+
+    <!-- Login Panel -->
+    <div id="loginPanel">
+      <h2>Inicia sesión</h2>
+      <label>Rol:</label>
+      <select id="loginRole">
+        <option value="student">Estudiante</option>
+        <option value="teacher">Profesor</option>
+      </select>
+      <br><br>
+
+      <label>Usuario:</label>
+      <input type="text" id="loginUsername" class="lms-input" />
+      <br>
+      <label>Contraseña:</label>
+      <input type="password" id="loginPassword" class="lms-input" />
+      <br><br>
+      <button onclick="attemptLogin()">Login</button>
+    </div>
+
+    <!-- Dashboard Panel (after login) -->
+    <div id="dashboardPanel" class="hidden">
+      <h2>Bienvenid@, <span id="dashboardUserName">Usuario</span></h2>
+      <p id="dashboardUserRole"></p>
+      <button onclick="logout()">Cierra sesión</button>
+      <div class="lms-display-area" id="lmsDisplayArea"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- LOG AREA (must have this exact ID) -->
+<div class="lms-log" id="lmsLog"></div>
+
+<script src="lmsApp.js"></script>
+</body>
+</html>

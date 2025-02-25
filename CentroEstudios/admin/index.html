@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>jocarsa | LMS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Header -->
+<header class="admin-header">
+  <div class="admin-logo">jocarsa | LMS - Admin</div>
+      <button class="log-toggle-btn" onclick="toggleLog()">Mostrar Log</button>
+
+</header>
+
+<!-- Left Navigation -->
+<nav class="admin-nav">
+  <ul>
+    <li><a href="#" onclick="showSection('estudiantes')">Estudiantes</a></li>
+    <li><a href="#" onclick="showSection('profesores')">Profesores</a></li>
+    <li><a href="#" onclick="showSection('cursos')">Cursos</a></li>
+    <li><a href="#" onclick="showSection('asignaturas')">Asignaturas</a></li>
+    <li><a href="#" onclick="showSection('temas')">Temas</a></li>
+    <li><a href="#" onclick="showSection('contenidos')">Contenidos</a></li>
+    <li><a href="#" onclick="showSection('enroll')">Enroll / Linking</a></li>
+  </ul>
+</nav>
+
+<!-- Main Content -->
+<main class="admin-main">
+
+  <!-- Estudiantes Section -->
+  <section id="section-estudiantes" class="admin-section">
+    <h2>Gestionar Estudiantes</h2>
+    <div class="form-group">
+      <label>Nombre:</label>
+      <input type="text" id="estudianteName" placeholder="Ej. Juan" />
+
+      <label>Edad:</label>
+      <input type="number" id="estudianteEdad" placeholder="Ej. 23" />
+
+      <!-- NEW FIELDS for username, password -->
+      <label>Username:</label>
+      <input type="text" id="estudianteUser" placeholder="(Opcional)" />
+      <label>Password:</label>
+      <input type="text" id="estudiantePass" placeholder="(Opcional)" />
+
+      <button onclick="createEstudiante()">Crear Estudiante</button>
+    </div>
+
+    <div class="list-container">
+      <button class="refresh-btn" onclick="listEstudiantes()">Listar Estudiantes</button>
+      <table id="estudiantesTable" class="crud-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Edad</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Profesores Section -->
+  <section id="section-profesores" class="admin-section">
+    <h2>Gestionar Profesores</h2>
+    <div class="form-group">
+      <label>Nombre:</label>
+      <input type="text" id="profesorName" placeholder="Ej. Maria" />
+
+      <label>Especialidad:</label>
+      <input type="text" id="profesorEsp" placeholder="Ej. Matemáticas" />
+
+      <!-- NEW FIELDS for username, password -->
+      <label>Username:</label>
+      <input type="text" id="profesorUser" placeholder="(Opcional)" />
+      <label>Password:</label>
+      <input type="text" id="profesorPass" placeholder="(Opcional)" />
+
+      <button onclick="createProfesor()">Crear Profesor</button>
+    </div>
+
+    <div class="list-container">
+      <button class="refresh-btn" onclick="listProfesores()">Listar Profesores</button>
+      <table id="profesoresTable" class="crud-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Especialidad</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Cursos Section -->
+  <section id="section-cursos" class="admin-section">
+    <h2>Gestionar Cursos</h2>
+    <div class="form-group">
+      <label>Nombre:</label>
+      <input type="text" id="cursoName" placeholder="Ej. Java101" />
+      <label>Duración (horas):</label>
+      <input type="number" id="cursoDuracion" placeholder="Ej. 40" />
+      <button onclick="createCurso()">Crear Curso</button>
+    </div>
+
+    <div class="list-container">
+      <button class="refresh-btn" onclick="listCursos()">Listar Cursos</button>
+      <table id="cursosTable" class="crud-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Duración</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Asignaturas Section -->
+  <section id="section-asignaturas" class="admin-section">
+    <h2>Gestionar Asignaturas</h2>
+    <div class="form-group">
+      <label>Nombre Asignatura:</label>
+      <input type="text" id="asignaturaName" placeholder="Ej. Algebra1" />
+      <label>Curso:</label>
+      <select id="asignaturaCursoSelect"></select>
+      <button onclick="createAsignatura()">Crear Asignatura</button>
+    </div>
+
+    <div class="list-container">
+      <button class="refresh-btn" onclick="listAsignaturas()">Listar Asignaturas</button>
+      <table id="asignaturasTable" class="crud-table">
+        <thead>
+          <tr>
+            <th>Asignatura</th>
+            <th>Curso</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Temas Section -->
+  <section id="section-temas" class="admin-section">
+    <h2>Gestionar Temas</h2>
+    <div class="form-group">
+      <label>Asignatura:</label>
+      <select id="temaAsignaturaSelect"></select>
+      <label>Nombre Tema:</label>
+      <input type="text" id="temaName" placeholder="Ej. 'Fundamentos'" />
+      <button onclick="createTema()">Crear Tema</button>
+    </div>
+    <div class="list-container">
+      <button class="refresh-btn" onclick="listTemas()">Listar Temas</button>
+      <table id="temasTable" class="crud-table">
+        <thead>
+          <tr>
+            <th>Tema</th>
+            <th>Asignatura</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Contenidos Section -->
+  <section id="section-contenidos" class="admin-section">
+    <h2>Gestionar Contenidos</h2>
+    <div class="form-group">
+      <label>Asignatura:</label>
+      <select id="contenidoAsigSelect"></select>
+      <label>Tema:</label>
+      <select id="contenidoTemaSelect"></select>
+    </div>
+    <div class="form-group">
+      <label>Título Contenido:</label>
+      <input type="text" id="contenidoTitulo" placeholder="Ej. 'Introducción a X'" />
+      <label>Texto:</label>
+      <input type="text" id="contenidoTexto" placeholder="Texto breve..." />
+      <button onclick="createContenido()">Crear Contenido</button>
+    </div>
+    <div class="list-container">
+      <button class="refresh-btn" onclick="listContenidos()">Listar Contenidos</button>
+      <table id="contenidosTable" class="crud-table">
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Texto</th>
+            <th>Tema</th>
+            <th>Asignatura</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Enroll / Linking Section -->
+  <section id="section-enroll" class="admin-section">
+    <h2>Inscripciones</h2>
+    <!-- Enroll Estudiante in Asignatura -->
+    <div class="form-group">
+      <label>Asignatura:</label>
+      <select id="enrollAsignaturaSelectEst"></select>
+      <label>Estudiante:</label>
+      <select id="enrollEstudianteSelect"></select>
+      <button onclick="enrollEstudiante()">Inscribir Estudiante</button>
+    </div>
+    <br/>
+    <!-- Enroll Profesor in Asignatura -->
+    <div class="form-group">
+      <label>Asignatura:</label>
+      <select id="enrollAsignaturaSelectProf"></select>
+      <label>Profesor:</label>
+      <select id="enrollProfesorSelect"></select>
+      <button onclick="enrollProfesor()">Inscribir Profesor</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- Debug output area -->
+<div class="output-panel" id="outputPanel">
+  <h3>Server Log</h3>
+  <pre id="outputArea"></pre>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

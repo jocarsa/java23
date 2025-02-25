@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebSocket Client</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    textarea { width: 100%; height: 150px; margin-bottom: 10px; font-family: monospace; }
+    input { width: calc(100% - 100px); padding: 5px; }
+    button { padding: 6px 12px; margin-left: 5px; cursor: pointer; }
+    .status { font-weight: bold; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>WebSocket Client</h2>
+  <div class="status">Status: <span id="status">Disconnected</span></div>
+
+  <textarea id="messages" readonly></textarea><br>
+  <input type="text" id="inputMessage" placeholder="Type a message...">
+  <button onclick="sendMessage()">Send</button>
+  <button onclick="disconnect()">Disconnect</button>
+
+  <script>
+    let ws;
+    const statusElement = document.getElementById("status");
+    const messagesElement = document.getElementById("messages");
+    const inputElement = document.getElementById("inputMessage");
+
+    function connect() {
+      ws = new WebSocket("ws://jocarsa.com:3000"); // Update with your server URL if different
+
+      ws.onopen = () => {
+        statusElement.textContent = "Connected";
+        appendMessage("✅ Connected to WebSocket server.");
+      };
+
+      ws.onmessage = (event) => {
+        appendMessage(`📩 Server: ${event.data}`);
+      };
+
+      ws.onclose = () => {
+        statusElement.textContent = "Disconnected";
+        appendMessage("❌ Disconnected from server.");
+      };
+
+      ws.onerror = (error) => {
+        appendMessage(`⚠️ Error: ${error.message}`);
+      };
+    }
+
+    function sendMessage() {
+      const message = inputElement.value.trim();
+      if (message && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(message);
+        appendMessage(`📤 You: ${message}`);
+        inputElement.value = "";
+      }
+    }
+
+    function disconnect() {
+      if (ws) {
+        ws.close();
+      }
+    }
+
+    function appendMessage(message) {
+      messagesElement.value += message + "\n";
+      messagesElement.scrollTop = messagesElement.scrollHeight;
+    }
+
+    // Connect on page load
+    window.onload = connect;
+
+    // Send message on Enter key
+    inputElement.addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
+  </script>
+
+</body>
+</html>

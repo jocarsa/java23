@@ -1,0 +1,154 @@
+/* lms.css */
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+
+/* Basic reset & font */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: Ubuntu,"Helvetica Neue", Arial, sans-serif;
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+/* Header */
+.lms-header {
+  background-color: #324c5b; /* darker header color */
+  color: #fff;
+  text-align: center;
+  padding: 15px;
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+/* Container for main layout */
+.lms-container {
+  display: flex;
+  height: calc(100vh - 60px);
+}
+
+/* Left nav area */
+.lms-nav {
+  width: 250px;
+  background-color: #ffffff;
+  border-right: 1px solid #ddd;
+  padding: 20px;
+  overflow-y: auto;
+}
+.lms-nav h3 {
+  margin-bottom: 10px;
+  font-size: 1.1em;
+  color: #324c5b;
+}
+.lms-nav ul {
+  list-style: none;
+  padding-left: 0;
+}
+.lms-nav li {
+  margin: 6px 0;
+}
+.lms-nav a {
+  color: #324c5b;
+  text-decoration: none;
+  cursor: pointer;
+}
+.lms-nav a:hover {
+  text-decoration: underline;
+}
+
+/* Main content area */
+.lms-main {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background-color: #fff;
+  border-left: 1px solid #eee; /* optional if you want a vertical divider */
+}
+
+/* The login & dashboard panels */
+#loginPanel, #dashboardPanel {
+  background-color: #fff;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+.hidden {
+  display: none !important;
+}
+
+/* Form inputs styling (IMPORTANT) */
+.lms-input,
+#loginRole,
+.lms-main input[type="text"],
+.lms-main input[type="password"],
+.lms-main select {
+  display: inline-block;
+  padding: 8px;
+  margin: 5px 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  min-width: 220px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+.lms-input:focus,
+.lms-main input[type="text"]:focus,
+.lms-main input[type="password"]:focus,
+.lms-main select:focus {
+  outline: none;
+  border-color: #007cba;
+}
+
+/* Buttons */
+button {
+  background-color: #007cba;
+  color: #fff;
+  border: none;
+  padding: 8px 15px;
+  margin: 5px 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+button:hover {
+  background-color: #005f8d;
+}
+
+/* Display area for the "Temas & Contenidos" or other info */
+.lms-display-area {
+  margin-top: 20px;
+}
+.lms-section {
+  background-color: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  padding: 10px;
+}
+.lms-section h4 {
+  margin-bottom: 8px;
+}
+.lms-article {
+  background-color: #fff;
+  border: 1px solid #eee;
+  margin: 5px 0 0 15px;
+  padding: 10px;
+  border-radius: 3px;
+}
+
+/* Footer log area at bottom */
+.lms-log {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100px;
+  background-color: #000;
+  color: #0f0;
+  overflow-y: auto;
+  font-family: monospace;
+  padding: 10px;
+  border-top: 2px solid #333;
+}
