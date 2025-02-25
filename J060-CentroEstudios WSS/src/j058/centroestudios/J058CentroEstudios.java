@@ -1,205 +1,188 @@
 package j058.centroestudios;
 
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.io.*;
-import java.security.MessageDigest;
+import java.net.*;
+import java.security.*;
+import javax.net.ssl.*;
 import java.sql.*;
 import java.util.*;
-import java.util.Base64;
 
-/**
- * Pure Java "WebSocket-like" server with:
- *  - Estudiante, Profesor, Curso (synced to MySQL)
- *  - Asignatura, Tema, Contenido in-memory
- *  - Create, Read, Update, Delete endpoints for all entities
- *  - Extended with username/password for Estudiante & Profesor, plus login & "my" queries.
- */
 public class J058CentroEstudios {
-
-    // ========== ENTITY CLASSES ==========
-
-    // --- Estudiante (extended with username/password) ---
+    
+    // --- SSL Configuration ---
+    private static final int PORT = 8443; // SSL port
+    private static final String KEYSTORE_PATH = "/home/keystore.jks";
+    private static final String KEYSTORE_PASSWORD = "MasterMedia123$";
+    
+    // --- In-Memory Lists ---
+    private static final List<Estudiante> estudiantes = new ArrayList<>();
+    private static final List<Profesor>   profesores  = new ArrayList<>();
+    private static final List<Curso>      cursos      = new ArrayList<>();
+    private static final List<Asignatura> asignaturas = new ArrayList<>();
+    
+    // --- DB Configuration ---
+    private static final String DB_URL      = "jdbc:mysql://localhost:3306/centroestudios";
+    private static final String DB_USER     = "centroestudios";
+    private static final String DB_PASSWORD = "Centroestudios123$";
+    
+    // ===============================
+    // === ENTITY CLASSES ============
+    // ===============================
+    
     public static class Estudiante {
         private String nombre;
         private int edad;
-
-        // NEW fields for LMS:
         private String username;
         private String password;
-
-        // Full constructor
+        
         public Estudiante(String nombre, int edad, String username, String password) {
             this.nombre = nombre;
             this.edad = edad;
             this.username = username;
             this.password = password;
         }
-        // Old constructor for backward compatibility
+        
         public Estudiante(String nombre, int edad) {
             this(nombre, edad, null, null);
         }
-
+        
         public String getNombre() { return nombre; }
         public void setNombre(String nombre) { this.nombre = nombre; }
-
         public int getEdad() { return edad; }
         public void setEdad(int edad) { this.edad = edad; }
-
         public String getUsername() { return username; }
         public void setUsername(String username) { this.username = username; }
-
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
     }
-
-    // --- Profesor (extended with username/password) ---
+    
     public static class Profesor {
         private String nombre;
         private String especialidad;
-
-        // NEW fields:
         private String username;
         private String password;
-
-        // Full constructor
+        
         public Profesor(String nombre, String especialidad, String username, String password) {
             this.nombre = nombre;
             this.especialidad = especialidad;
             this.username = username;
             this.password = password;
         }
-        // Old constructor for compatibility
+        
         public Profesor(String nombre, String especialidad) {
             this(nombre, especialidad, null, null);
         }
-
+        
         public String getNombre() { return nombre; }
         public void setNombre(String nombre) { this.nombre = nombre; }
-
         public String getEspecialidad() { return especialidad; }
         public void setEspecialidad(String especialidad) { this.especialidad = especialidad; }
-
         public String getUsername() { return username; }
         public void setUsername(String username) { this.username = username; }
-
         public String getPassword() { return password; }
         public void setPassword(String password) { this.password = password; }
     }
-
+    
     public static class Curso {
         private String nombre;
         private int duracionEnHoras;
-
+        
         public Curso(String nombre, int duracionEnHoras) {
             this.nombre = nombre;
             this.duracionEnHoras = duracionEnHoras;
         }
-
+        
         public String getNombre() { return nombre; }
         public void setNombre(String nombre) { this.nombre = nombre; }
-
         public int getDuracionEnHoras() { return duracionEnHoras; }
-        public void setDuracionEnHoras(int d) { this.duracionEnHoras = d; }
+        public void setDuracionEnHoras(int duracionEnHoras) { this.duracionEnHoras = duracionEnHoras; }
     }
-
-    // --- Asignatura (in-memory) ---
+    
     public static class Asignatura {
         private String nombre;
         private Curso curso;
-
         private List<Estudiante> estudiantes = new ArrayList<>();
-        private List<Profesor>   profesores  = new ArrayList<>();
-        private List<Tema>       temas       = new ArrayList<>();
-
+        private List<Profesor> profesores = new ArrayList<>();
+        private List<Tema> temas = new ArrayList<>();
+        
         public Asignatura(String nombre, Curso curso) {
             this.nombre = nombre;
-            this.curso  = curso;
+            this.curso = curso;
         }
-
+        
         public String getNombre() { return nombre; }
         public void setNombre(String nombre) { this.nombre = nombre; }
-
         public Curso getCurso() { return curso; }
-        public void setCurso(Curso c) { this.curso = c; }
-
+        public void setCurso(Curso curso) { this.curso = curso; }
         public List<Estudiante> getEstudiantes() { return estudiantes; }
-        public List<Profesor>   getProfesores()  { return profesores; }
-        public List<Tema>       getTemas()       { return temas; }
-
+        public List<Profesor> getProfesores() { return profesores; }
+        public List<Tema> getTemas() { return temas; }
+        
         public void addEstudiante(Estudiante e) { estudiantes.add(e); }
-        public void addProfesor(Profesor p)     { profesores.add(p); }
-        public void addTema(Tema t)             { temas.add(t); }
+        public void addProfesor(Profesor p) { profesores.add(p); }
+        public void addTema(Tema t) { temas.add(t); }
     }
-
-    // --- Tema (in-memory) ---
+    
     public static class Tema {
         private String nombre;
         private List<Contenido> contenidos = new ArrayList<>();
-
+        
         public Tema(String nombre) {
             this.nombre = nombre;
         }
-
+        
         public String getNombre() { return nombre; }
         public void setNombre(String nombre) { this.nombre = nombre; }
-
         public List<Contenido> getContenidos() { return contenidos; }
+        public void addContenido(Contenido c) { contenidos.add(c); }
     }
-
-    // --- Contenido (in-memory) ---
+    
     public static class Contenido {
         private String titulo;
         private String texto;
-
+        
         public Contenido(String titulo, String texto) {
             this.titulo = titulo;
             this.texto = texto;
         }
-
+        
         public String getTitulo() { return titulo; }
-        public void setTitulo(String t) { this.titulo = t; }
-
+        public void setTitulo(String titulo) { this.titulo = titulo; }
         public String getTexto() { return texto; }
-        public void setTexto(String tx) { this.texto = tx; }
+        public void setTexto(String texto) { this.texto = texto; }
     }
-
-    // ========== IN-MEMORY LISTS ==========
-
-    private static final List<Estudiante> estudiantes = new ArrayList<>();
-    private static final List<Profesor>   profesores  = new ArrayList<>();
-    private static final List<Curso>      cursos      = new ArrayList<>();
-    private static final List<Asignatura> asignaturas = new ArrayList<>();
-
-    // ========== DB CONFIG ==========
-
-    private static final String DB_URL      = "jdbc:mysql://localhost:3306/centroestudios";
-    private static final String DB_USER     = "centroestudios";
-    private static final String DB_PASSWORD = "centroestudios";
-
-    // ========== MAIN ==========
-
+    
+    // ===============================
+    // === MAIN & SERVER ============
+    // ===============================
+    
     public static void main(String[] args) {
+        // Set SSL system properties
+        System.setProperty("javax.net.ssl.keyStore", KEYSTORE_PATH);
+        System.setProperty("javax.net.ssl.keyStorePassword", KEYSTORE_PASSWORD);
+        
         initDatabaseData();
         startDatabaseSyncThread();
-        startServer(3000);
+        // Start only the secure WebSocket server (WSS)
+        startSecureServer();
     }
-
-    // ========== SERVER ==========
-
-    private static void startServer(int port) {
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("Server running on ws://localhost:" + port);
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                new Thread(() -> handleClient(clientSocket)).start();
+    
+    private static void startSecureServer() {
+        try {
+            SSLServerSocketFactory ssf = (SSLServerSocketFactory) SSLServerSocketFactory.getDefault();
+            try (SSLServerSocket serverSocket = (SSLServerSocket) ssf.createServerSocket(PORT)) {
+                System.out.println("Secure WebSocket Server running on wss://localhost:" + PORT);
+                while (true) {
+                    SSLSocket clientSocket = (SSLSocket) serverSocket.accept();
+                    new Thread(() -> handleClient(clientSocket)).start();
+                }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-
-    private static void handleClient(Socket socket) {
+    
+    private static void handleClient(SSLSocket socket) {
         try (InputStream in = socket.getInputStream();
              OutputStream out = socket.getOutputStream()) {
 
@@ -217,17 +200,16 @@ public class J058CentroEstudios {
                 return;
             }
 
-            // 2) Handshake response
+            // 2) Send handshake response
             String acceptKey = createAcceptKey(key);
-            String resp =
-                "HTTP/1.1 101 Switching Protocols\r\n" +
-                "Upgrade: websocket\r\n" +
-                "Connection: Upgrade\r\n" +
-                "Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n";
+            String resp = "HTTP/1.1 101 Switching Protocols\r\n" +
+                          "Upgrade: websocket\r\n" +
+                          "Connection: Upgrade\r\n" +
+                          "Sec-WebSocket-Accept: " + acceptKey + "\r\n\r\n";
             out.write(resp.getBytes("UTF-8"));
             out.flush();
 
-            // 3) Now read frames
+            // 3) Read and process frames
             while (!socket.isClosed()) {
                 String msg = readTextFrame(in);
                 if (msg == null) {
@@ -244,323 +226,11 @@ public class J058CentroEstudios {
             try { socket.close(); } catch (IOException ignore) {}
         }
     }
-
-    // ========== DB SYNC ==========
-
-    private static void startDatabaseSyncThread() {
-        Thread t = new Thread(() -> {
-            while (true) {
-                try {
-                    Thread.sleep(5000);
-                    syncDatabase();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                    break;
-                }
-            }
-        });
-        t.setDaemon(true);
-        t.start();
-    }
-
-    private static void initDatabaseData() {
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-            createTablesIfNeeded(conn);
-
-            // Load Estudiantes with username/password
-            try (Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery(
-                     "SELECT nombre, edad, username, password FROM estudiantes")) {
-                while (rs.next()) {
-                    String nombre = rs.getString("nombre");
-                    int    edad   = rs.getInt("edad");
-                    String user   = rs.getString("username");
-                    String pass   = rs.getString("password");
-                    estudiantes.add(new Estudiante(nombre, edad, user, pass));
-                }
-            }
-
-            // Load Profesores with username/password
-            try (Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery(
-                     "SELECT nombre, especialidad, username, password FROM profesores")) {
-                while (rs.next()) {
-                    String nombre = rs.getString("nombre");
-                    String esp    = rs.getString("especialidad");
-                    String user   = rs.getString("username");
-                    String pass   = rs.getString("password");
-                    profesores.add(new Profesor(nombre, esp, user, pass));
-                }
-            }
-
-            // Load Cursos
-            try (Statement st = conn.createStatement();
-                 ResultSet rs = st.executeQuery("SELECT nombre, duracion FROM cursos")) {
-                while (rs.next()) {
-                    String cName = rs.getString("nombre");
-                    int    dur   = rs.getInt("duracion");
-                    cursos.add(new Curso(cName, dur));
-                }
-            }
-
-            System.out.println("Loaded from DB: " 
-                + estudiantes.size() + " estudiantes, "
-                + profesores.size()  + " profesores, "
-                + cursos.size()      + " cursos.");
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void syncDatabase() {
-        System.out.println("Syncing data to DB...");
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-            dropTables(conn);
-            createTables(conn);
-            insertAllData(conn);
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void createTablesIfNeeded(Connection conn) throws SQLException {
-        try (Statement st = conn.createStatement()) {
-            // Tabla de Estudiantes
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS estudiantes ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100), "
-                           + "edad INT, "
-                           + "username VARCHAR(100) UNIQUE, "
-                           + "password VARCHAR(100))");
-
-            // Tabla de Profesores
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS profesores ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100), "
-                           + "especialidad VARCHAR(100), "
-                           + "username VARCHAR(100) UNIQUE, "
-                           + "password VARCHAR(100))");
-
-            // Tabla de Cursos
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS cursos ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100) UNIQUE, "
-                           + "duracion INT)");
-
-            // Tabla de Asignaturas
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS asignaturas ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100) UNIQUE, "
-                           + "curso_id INT, "
-                           + "FOREIGN KEY (curso_id) REFERENCES cursos(id))");
-
-            // Tabla de Temas
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS temas ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100), "
-                           + "asignatura_id INT, "
-                           + "FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id))");
-
-            // Tabla de Contenidos
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS contenidos ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "titulo VARCHAR(100), "
-                           + "texto TEXT, "
-                           + "tema_id INT, "
-                           + "FOREIGN KEY (tema_id) REFERENCES temas(id))");
-
-            // Tabla de relación Estudiantes - Asignaturas (matrícula)
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS estudiante_asignatura ("
-                           + "estudiante_id INT, "
-                           + "asignatura_id INT, "
-                           + "PRIMARY KEY (estudiante_id, asignatura_id), "
-                           + "FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id), "
-                           + "FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id))");
-
-            // Tabla de relación Profesores - Asignaturas (asignación de profesores)
-            st.executeUpdate("CREATE TABLE IF NOT EXISTS profesor_asignatura ("
-                           + "profesor_id INT, "
-                           + "asignatura_id INT, "
-                           + "PRIMARY KEY (profesor_id, asignatura_id), "
-                           + "FOREIGN KEY (profesor_id) REFERENCES profesores(id), "
-                           + "FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id))");
-        }
-    }
-
-
-    private static void dropTables(Connection conn) throws SQLException {
-        try (Statement st = conn.createStatement()) {
-            // Primero eliminamos las tablas intermedias para evitar conflictos con claves foráneas
-            st.executeUpdate("DROP TABLE IF EXISTS estudiante_asignatura");
-            st.executeUpdate("DROP TABLE IF EXISTS profesor_asignatura");
-
-            // Luego eliminamos las tablas dependientes
-            st.executeUpdate("DROP TABLE IF EXISTS contenidos");
-            st.executeUpdate("DROP TABLE IF EXISTS temas");
-            st.executeUpdate("DROP TABLE IF EXISTS asignaturas");
-
-            // Finalmente eliminamos las tablas principales
-            st.executeUpdate("DROP TABLE IF EXISTS estudiantes");
-            st.executeUpdate("DROP TABLE IF EXISTS profesores");
-            st.executeUpdate("DROP TABLE IF EXISTS cursos");
-        }
-    }
-
-
-    private static void createTables(Connection conn) throws SQLException {
-        try (Statement st = conn.createStatement()) {
-            st.executeUpdate("CREATE TABLE estudiantes ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100), "
-                           + "edad INT, "
-                           + "username VARCHAR(100), "
-                           + "password VARCHAR(100))");
-
-            st.executeUpdate("CREATE TABLE profesores ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100), "
-                           + "especialidad VARCHAR(100), "
-                           + "username VARCHAR(100), "
-                           + "password VARCHAR(100))");
-
-            st.executeUpdate("CREATE TABLE cursos ("
-                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
-                           + "nombre VARCHAR(100), "
-                           + "duracion INT)");
-        }
-    }
-
-    private static void insertAllData(Connection conn) throws SQLException {
-        // Estudiantes
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO estudiantes (nombre, edad, username, password) VALUES (?,?,?,?)",
-             Statement.RETURN_GENERATED_KEYS)) {
-            for (Estudiante e : estudiantes) {
-                ps.setString(1, e.getNombre());
-                ps.setInt(2, e.getEdad());
-                ps.setString(3, e.getUsername());
-                ps.setString(4, e.getPassword());
-                ps.executeUpdate();
-                try (ResultSet rs = ps.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        e.setId(rs.getInt(1)); // Guardar ID generado
-                    }
-                }
-            }
-        }
-
-        // Profesores
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO profesores (nombre, especialidad, username, password) VALUES (?,?,?,?)",
-             Statement.RETURN_GENERATED_KEYS)) {
-            for (Profesor p : profesores) {
-                ps.setString(1, p.getNombre());
-                ps.setString(2, p.getEspecialidad());
-                ps.setString(3, p.getUsername());
-                ps.setString(4, p.getPassword());
-                ps.executeUpdate();
-                try (ResultSet rs = ps.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        p.setId(rs.getInt(1)); // Guardar ID generado
-                    }
-                }
-            }
-        }
-
-        // Cursos
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO cursos (nombre, duracion) VALUES (?,?)",
-             Statement.RETURN_GENERATED_KEYS)) {
-            for (Curso c : cursos) {
-                ps.setString(1, c.getNombre());
-                ps.setInt(2, c.getDuracionEnHoras());
-                ps.executeUpdate();
-                try (ResultSet rs = ps.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        c.setId(rs.getInt(1)); // Guardar ID generado
-                    }
-                }
-            }
-        }
-
-        // Asignaturas
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO asignaturas (nombre, curso_id) VALUES (?,?)",
-             Statement.RETURN_GENERATED_KEYS)) {
-            for (Asignatura a : asignaturas) {
-                ps.setString(1, a.getNombre());
-                ps.setInt(2, a.getCurso().getId());
-                ps.executeUpdate();
-                try (ResultSet rs = ps.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        a.setId(rs.getInt(1)); // Guardar ID generado
-                    }
-                }
-            }
-        }
-
-        // Temas
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO temas (nombre, asignatura_id) VALUES (?,?)",
-             Statement.RETURN_GENERATED_KEYS)) {
-            for (Asignatura a : asignaturas) {
-                for (Tema t : a.getTemas()) {
-                    ps.setString(1, t.getNombre());
-                    ps.setInt(2, a.getId());
-                    ps.executeUpdate();
-                    try (ResultSet rs = ps.getGeneratedKeys()) {
-                        if (rs.next()) {
-                            t.setId(rs.getInt(1)); // Guardar ID generado
-                        }
-                    }
-                }
-            }
-        }
-
-        // Contenidos
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO contenidos (titulo, texto, tema_id) VALUES (?,?,?)")) {
-            for (Asignatura a : asignaturas) {
-                for (Tema t : a.getTemas()) {
-                    for (Contenido c : t.getContenidos()) {
-                        ps.setString(1, c.getTitulo());
-                        ps.setString(2, c.getTexto());
-                        ps.setInt(3, t.getId());
-                        ps.executeUpdate();
-                    }
-                }
-            }
-        }
-
-        // Relación Estudiantes - Asignaturas
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO estudiante_asignatura (estudiante_id, asignatura_id) VALUES (?,?)")) {
-            for (Asignatura a : asignaturas) {
-                for (Estudiante e : a.getEstudiantesEnrolled()) {
-                    ps.setInt(1, e.getId());
-                    ps.setInt(2, a.getId());
-                    ps.executeUpdate();
-                }
-            }
-        }
-
-        // Relación Profesores - Asignaturas
-        try (PreparedStatement ps = conn.prepareStatement(
-             "INSERT INTO profesor_asignatura (profesor_id, asignatura_id) VALUES (?,?)")) {
-            for (Asignatura a : asignaturas) {
-                for (Profesor p : a.getProfesoresEnrolled()) {
-                    ps.setInt(1, p.getId());
-                    ps.setInt(2, a.getId());
-                    ps.executeUpdate();
-                }
-            }
-        }
-    }
-
-
-    // ========== COMMAND DISPATCHER ==========
-
+    
+    // ===============================
+    // === COMMAND DISPATCHER ========
+    // ===============================
+    
     private static String handleCommand(String msg) {
         // NEW: LMS Commands
         if (msg.startsWith("loginStudent:"))        return handleLoginStudent(msg);
@@ -598,14 +268,42 @@ public class J058CentroEstudios {
         if (msg.startsWith("deleteTema:"))       return handleDeleteTema(msg);
         if (msg.startsWith("updateContenido:"))  return handleUpdateContenido(msg);
         if (msg.startsWith("deleteContenido:"))  return handleDeleteContenido(msg);
-
+        // Admin login
+        if (msg.startsWith("loginAdmin:")) {
+            return handleLoginAdmin(msg);
+        }
         return "ERROR: Unknown command";
     }
+    
+    // --- LOGIN & "MY" QUERIES ---
+    
+    private static String handleLoginAdmin(String msg) {
+        String data = msg.substring("loginAdmin:".length()).trim();
+        String[] parts = data.split(",");
+        if (parts.length != 2) {
+            return "ERROR: Use: loginAdmin: username,password";
+        }
+        String username = parts[0].trim();
+        String password = parts[1].trim();
 
-    // ========== NEW: LOGIN & "MY" QUERIES ==========
-
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            try (PreparedStatement ps = conn.prepareStatement(
+                 "SELECT nombre FROM administradores WHERE username = ? AND password = ?")) {
+                ps.setString(1, username);
+                ps.setString(2, password);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        return "OK: Admin " + rs.getString("nombre");
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return "ERROR: Invalid admin credentials.";
+    }
+    
     private static String handleLoginStudent(String msg) {
-        // "loginStudent: username,password"
         String data = msg.substring("loginStudent:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 2) {
@@ -624,9 +322,8 @@ public class J058CentroEstudios {
         }
         return "ERROR: Invalid student credentials.";
     }
-
+    
     private static String handleLoginTeacher(String msg) {
-        // "loginTeacher: username,password"
         String data = msg.substring("loginTeacher:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 2) {
@@ -645,16 +342,13 @@ public class J058CentroEstudios {
         }
         return "ERROR: Invalid teacher credentials.";
     }
-
+    
     private static String handleMyCoursesStudent(String msg) {
-        // "myCoursesStudent: username"
         String username = msg.substring("myCoursesStudent:".length()).trim();
         Estudiante stu = findStudentByUsername(username);
         if (stu == null) {
             return "ERROR: Student with username='" + username + "' not found.";
         }
-
-        // gather distinct courses from Asignaturas in which the student is enrolled
         Set<Curso> courseSet = new HashSet<>();
         for (Asignatura a : asignaturas) {
             if (a.getEstudiantes().contains(stu)) {
@@ -671,9 +365,8 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
+    
     private static String handleMyAsignaturasStudent(String msg) {
-        // "myAsignaturasStudent: username"
         String username = msg.substring("myAsignaturasStudent:".length()).trim();
         Estudiante stu = findStudentByUsername(username);
         if (stu == null) {
@@ -695,9 +388,8 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
+    
     private static String handleMyAsignaturasTeacher(String msg) {
-        // "myAsignaturasTeacher: username"
         String username = msg.substring("myAsignaturasTeacher:".length()).trim();
         Profesor prof = findTeacherByUsername(username);
         if (prof == null) {
@@ -719,30 +411,27 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
-    // ========== CREATE/LIST (Existing) ==========
-
+    
+    // --- CREATE / LIST COMMANDS ---
+    
     private static String handleCreateStudent(String msg) {
-        // "createStudent: name,age"  OR  "createStudent: name,age,username,password"
         String data = msg.substring("createStudent:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length == 2) {
-            // old style
             try {
                 String name = parts[0].trim();
-                int    age  = Integer.parseInt(parts[1].trim());
+                int age = Integer.parseInt(parts[1].trim());
                 estudiantes.add(new Estudiante(name, age));
                 return "Estudiante created: " + name;
             } catch (NumberFormatException e) {
                 return "ERROR: Age must be integer.";
             }
         } else if (parts.length == 4) {
-            // new style
             try {
-                String name  = parts[0].trim();
-                int    age   = Integer.parseInt(parts[1].trim());
-                String user  = parts[2].trim();
-                String pass  = parts[3].trim();
+                String name = parts[0].trim();
+                int age = Integer.parseInt(parts[1].trim());
+                String user = parts[2].trim();
+                String pass = parts[3].trim();
                 estudiantes.add(new Estudiante(name, age, user, pass));
                 return "Estudiante created with username='" + user + "'";
             } catch (NumberFormatException e) {
@@ -751,7 +440,7 @@ public class J058CentroEstudios {
         }
         return "ERROR: Use createStudent: name,age [or name,age,username,password]";
     }
-
+    
     private static String listEstudiantes() {
         if (estudiantes.isEmpty()) return "No estudiantes found.";
         StringBuilder sb = new StringBuilder("Estudiantes:\n");
@@ -761,19 +450,18 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
+    
     private static String handleCreateProfesor(String msg) {
-        // "createProfesor: name,especialidad" OR 4-arg for user,pass
         String data = msg.substring("createProfesor:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length == 2) {
             String name = parts[0].trim();
-            String esp  = parts[1].trim();
+            String esp = parts[1].trim();
             profesores.add(new Profesor(name, esp));
             return "Profesor created: " + name;
         } else if (parts.length == 4) {
             String name = parts[0].trim();
-            String esp  = parts[1].trim();
+            String esp = parts[1].trim();
             String user = parts[2].trim();
             String pass = parts[3].trim();
             profesores.add(new Profesor(name, esp, user, pass));
@@ -781,7 +469,7 @@ public class J058CentroEstudios {
         }
         return "ERROR: Use createProfesor: name,especialidad[,username,password]";
     }
-
+    
     private static String listProfesores() {
         if (profesores.isEmpty()) return "No profesores found.";
         StringBuilder sb = new StringBuilder("Profesores:\n");
@@ -791,9 +479,8 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
+    
     private static String handleCreateCurso(String msg) {
-        // "createCurso: name,duracion"
         String data = msg.substring("createCurso:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length == 2) {
@@ -808,7 +495,7 @@ public class J058CentroEstudios {
         }
         return "ERROR: Use: createCurso: name,duracion";
     }
-
+    
     private static String listCursos() {
         if (cursos.isEmpty()) return "No cursos found.";
         StringBuilder sb = new StringBuilder("Cursos:\n");
@@ -818,14 +505,13 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
+    
     private static String handleCreateAsignatura(String msg) {
-        // "createAsignatura: name,cursoName"
         String data = msg.substring("createAsignatura:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length == 2) {
             String asigName = parts[0].trim();
-            String cursoName= parts[1].trim();
+            String cursoName = parts[1].trim();
             Curso c = findCursoByName(cursoName);
             if (c == null) {
                 return "ERROR: Curso not found: " + cursoName;
@@ -835,7 +521,7 @@ public class J058CentroEstudios {
         }
         return "ERROR: Use: createAsignatura: asigName,cursoName";
     }
-
+    
     private static String listAsignaturas() {
         if (asignaturas.isEmpty()) return "No asignaturas found.";
         StringBuilder sb = new StringBuilder("Asignaturas:\n");
@@ -845,9 +531,8 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
+    
     private static String handleEnrollEstudiante(String msg) {
-        // "enrollEstudiante: asigName, studentName"
         String data = msg.substring("enrollEstudiante:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length == 2) {
@@ -862,9 +547,8 @@ public class J058CentroEstudios {
         }
         return "ERROR: Use: enrollEstudiante: asigName,estName";
     }
-
+    
     private static String handleEnrollProfesor(String msg) {
-        // "enrollProfesor: asigName, profName"
         String data = msg.substring("enrollProfesor:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length == 2) {
@@ -879,9 +563,8 @@ public class J058CentroEstudios {
         }
         return "ERROR: Use: enrollProfesor: asigName,profName";
     }
-
+    
     private static String handleCreateTema(String msg) {
-        // "createTema: asigName, temaName"
         String data = msg.substring("createTema:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length == 2) {
@@ -895,9 +578,8 @@ public class J058CentroEstudios {
         }
         return "ERROR: Use: createTema: asigName,temaName";
     }
-
+    
     private static String handleListTemas(String msg) {
-        // "listTemas: asigName"
         String asigN = msg.substring("listTemas:".length()).trim();
         if (asigN.isEmpty()) return "ERROR: Must specify Asignatura name";
         Asignatura a = findAsignaturaByName(asigN);
@@ -909,52 +591,44 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
+    
     private static String handleCreateContenido(String msg) {
-        // "createContenido: asigName, temaName, titulo, texto"
         String data = msg.substring("createContenido:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length < 4) {
             return "ERROR: Use: createContenido: asigName,temaName,titulo,texto";
         }
-        String asigN  = parts[0].trim();
-        String temaN  = parts[1].trim();
+        String asigN = parts[0].trim();
+        String temaN = parts[1].trim();
         String titulo = parts[2].trim();
-
-        // if there's leftover for texto
         StringBuilder sb = new StringBuilder();
         if (parts.length > 4) {
             sb.append(parts[3].trim());
-            for (int i=4; i<parts.length; i++) {
+            for (int i = 4; i < parts.length; i++) {
                 sb.append(",").append(parts[i].trim());
             }
         } else {
             sb.append(parts[3].trim());
         }
         String texto = sb.toString();
-
         Asignatura asig = findAsignaturaByName(asigN);
         if (asig == null) return "ERROR: Asignatura not found: " + asigN;
         Tema t = findTemaByName(asig, temaN);
         if (t == null) return "ERROR: Tema not found: " + temaN;
-
         t.getContenidos().add(new Contenido(titulo, texto));
         return "Contenido created: " + titulo;
     }
-
+    
     private static String handleListContenidos(String msg) {
-        // "listContenidos: asigName, temaName"
         String data = msg.substring("listContenidos:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 2) return "ERROR: Use: listContenidos: asigName,temaName";
-        String asigN  = parts[0].trim();
-        String temaN  = parts[1].trim();
-
+        String asigN = parts[0].trim();
+        String temaN = parts[1].trim();
         Asignatura a = findAsignaturaByName(asigN);
         if (a == null) return "ERROR: Asignatura not found: " + asigN;
         Tema t = findTemaByName(a, temaN);
         if (t == null) return "ERROR: Tema not found: " + temaN;
-
         if (t.getContenidos().isEmpty()) return "No contenidos found for Tema '" + temaN + "'";
         StringBuilder sb = new StringBuilder("Contenidos in Tema '")
             .append(temaN).append("' of Asignatura '")
@@ -965,12 +639,10 @@ public class J058CentroEstudios {
         }
         return sb.toString();
     }
-
-    // ========== UPDATE & DELETE ENDPOINTS ==========
-
-    // Estudiante
+    
+    // --- UPDATE & DELETE COMMANDS ---
+    
     private static String handleUpdateEstudiante(String msg) {
-        // "updateEstudiante: oldName, newName, newAge"
         String data = msg.substring("updateEstudiante:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 3) return "ERROR: Use: updateEstudiante: oldName,newName,newAge";
@@ -979,198 +651,168 @@ public class J058CentroEstudios {
         int newAge;
         try { newAge = Integer.parseInt(parts[2].trim()); }
         catch (NumberFormatException e) { return "ERROR: Age must be integer."; }
-
         Estudiante e = findEstudianteByName(oldName);
         if (e == null) return "ERROR: Estudiante not found: " + oldName;
         e.setNombre(newName);
         e.setEdad(newAge);
         return "Estudiante updated: " + oldName + " -> " + newName;
     }
-
+    
     private static String handleDeleteEstudiante(String msg) {
-        // "deleteEstudiante: name"
         String name = msg.substring("deleteEstudiante:".length()).trim();
         Estudiante e = findEstudianteByName(name);
         if (e == null) return "ERROR: Estudiante not found: " + name;
         estudiantes.remove(e);
         return "Estudiante deleted: " + name;
     }
-
-    // Profesor
+    
     private static String handleUpdateProfesor(String msg) {
-        // "updateProfesor: oldName,newName,newEsp"
         String data = msg.substring("updateProfesor:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 3) return "ERROR: Use: updateProfesor: oldName,newName,newEsp";
         String oldName = parts[0].trim();
         String newName = parts[1].trim();
-        String newEsp  = parts[2].trim();
-
+        String newEsp = parts[2].trim();
         Profesor p = findProfesorByName(oldName);
         if (p == null) return "ERROR: Profesor not found: " + oldName;
         p.setNombre(newName);
         p.setEspecialidad(newEsp);
         return "Profesor updated: " + oldName + " -> " + newName;
     }
+    
     private static String handleDeleteProfesor(String msg) {
-        // "deleteProfesor: name"
         String name = msg.substring("deleteProfesor:".length()).trim();
         Profesor p = findProfesorByName(name);
         if (p == null) return "ERROR: Profesor not found: " + name;
         profesores.remove(p);
         return "Profesor deleted: " + name;
     }
-
-    // Curso
+    
     private static String handleUpdateCurso(String msg) {
-        // "updateCurso: oldName,newName,newDur"
         String data = msg.substring("updateCurso:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 3) return "ERROR: Use: updateCurso: oldName,newName,newDur";
         String oldName = parts[0].trim();
         String newName = parts[1].trim();
         int newDur;
-        try {
-            newDur = Integer.parseInt(parts[2].trim());
-        } catch (NumberFormatException e) {
-            return "ERROR: Dur must be integer.";
-        }
-
+        try { newDur = Integer.parseInt(parts[2].trim()); }
+        catch (NumberFormatException e) { return "ERROR: Dur must be integer."; }
         Curso c = findCursoByName(oldName);
         if (c == null) return "ERROR: Curso not found: " + oldName;
         c.setNombre(newName);
         c.setDuracionEnHoras(newDur);
         return "Curso updated: " + oldName + " -> " + newName;
     }
+    
     private static String handleDeleteCurso(String msg) {
-        // "deleteCurso: name"
         String name = msg.substring("deleteCurso:".length()).trim();
         Curso c = findCursoByName(name);
         if (c == null) return "ERROR: Curso not found: " + name;
         cursos.remove(c);
         return "Curso deleted: " + name;
     }
-
-    // Asignatura
+    
     private static String handleUpdateAsignatura(String msg) {
-        // "updateAsignatura: oldAsig,newAsig,newCurso"
         String data = msg.substring("updateAsignatura:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 3) return "ERROR: Use: updateAsignatura: oldAsig,newAsig,newCurso";
         String oldAsig = parts[0].trim();
         String newAsig = parts[1].trim();
-        String newCurso= parts[2].trim();
-
+        String newCurso = parts[2].trim();
         Asignatura a = findAsignaturaByName(oldAsig);
         if (a == null) return "ERROR: Asignatura not found: " + oldAsig;
         Curso c = findCursoByName(newCurso);
         if (c == null) return "ERROR: Curso not found: " + newCurso;
-
         a.setNombre(newAsig);
         a.setCurso(c);
         return "Asignatura updated: " + oldAsig + " -> " + newAsig;
     }
+    
     private static String handleDeleteAsignatura(String msg) {
-        // "deleteAsignatura: asigName"
         String name = msg.substring("deleteAsignatura:".length()).trim();
         Asignatura a = findAsignaturaByName(name);
         if (a == null) return "ERROR: Asignatura not found: " + name;
         asignaturas.remove(a);
         return "Asignatura deleted: " + name;
     }
-
-    // Tema
+    
     private static String handleUpdateTema(String msg) {
-        // "updateTema: asigName,oldTema,newTema"
         String data = msg.substring("updateTema:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 3) return "ERROR: Use: updateTema: asigName,oldTema,newTema";
         String asigName = parts[0].trim();
-        String oldTema  = parts[1].trim();
-        String newTema  = parts[2].trim();
-
+        String oldTema = parts[1].trim();
+        String newTema = parts[2].trim();
         Asignatura a = findAsignaturaByName(asigName);
         if (a == null) return "ERROR: Asignatura not found: " + asigName;
         Tema t = findTemaByName(a, oldTema);
         if (t == null) return "ERROR: Tema not found: " + oldTema;
-
         t.setNombre(newTema);
         return "Tema updated: " + oldTema + " -> " + newTema;
     }
+    
     private static String handleDeleteTema(String msg) {
-        // "deleteTema: asigName,temaName"
         String data = msg.substring("deleteTema:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 2) return "ERROR: Use: deleteTema: asigName,temaName";
         String asigName = parts[0].trim();
         String temaName = parts[1].trim();
-
         Asignatura a = findAsignaturaByName(asigName);
         if (a == null) return "ERROR: Asignatura not found: " + asigName;
         Tema t = findTemaByName(a, temaName);
         if (t == null) return "ERROR: Tema not found: " + temaName;
-
         a.getTemas().remove(t);
         return "Tema deleted: " + temaName;
     }
-
-    // Contenido
+    
     private static String handleUpdateContenido(String msg) {
-        // "updateContenido: asigName, temaName, oldTitulo, newTitulo, newTexto"
         String data = msg.substring("updateContenido:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length < 5) {
             return "ERROR: Use: updateContenido: asigName,temaName,oldTitulo,newTitulo,newTexto";
         }
-        String asigN   = parts[0].trim();
-        String temaN   = parts[1].trim();
-        String oldTit  = parts[2].trim();
-        String newTit  = parts[3].trim();
-
-        // rejoin leftover as newTexto
+        String asigN = parts[0].trim();
+        String temaN = parts[1].trim();
+        String oldTit = parts[2].trim();
+        String newTit = parts[3].trim();
         StringBuilder sb = new StringBuilder();
-        for (int i=4; i<parts.length; i++) {
+        for (int i = 4; i < parts.length; i++) {
             if (sb.length() > 0) sb.append(",");
             sb.append(parts[i].trim());
         }
         String newTexto = sb.toString();
-
         Asignatura a = findAsignaturaByName(asigN);
         if (a == null) return "ERROR: Asignatura not found: " + asigN;
         Tema t = findTemaByName(a, temaN);
         if (t == null) return "ERROR: Tema not found: " + temaN;
-
         Contenido c = findContenidoByTitulo(t, oldTit);
         if (c == null) return "ERROR: Contenido not found: " + oldTit;
         c.setTitulo(newTit);
         c.setTexto(newTexto);
         return "Contenido updated: " + oldTit + " -> " + newTit;
     }
+    
     private static String handleDeleteContenido(String msg) {
-        // "deleteContenido: asigName, temaName, titulo"
         String data = msg.substring("deleteContenido:".length()).trim();
         String[] parts = data.split(",");
         if (parts.length != 3) {
             return "ERROR: Use: deleteContenido: asigName,temaName,titulo";
         }
-        String asigN   = parts[0].trim();
-        String temaN   = parts[1].trim();
-        String titulo  = parts[2].trim();
-
+        String asigN = parts[0].trim();
+        String temaN = parts[1].trim();
+        String titulo = parts[2].trim();
         Asignatura a = findAsignaturaByName(asigN);
         if (a == null) return "ERROR: Asignatura not found: " + asigN;
         Tema t = findTemaByName(a, temaN);
         if (t == null) return "ERROR: Tema not found: " + temaN;
-
         Contenido c = findContenidoByTitulo(t, titulo);
         if (c == null) return "ERROR: Contenido not found: " + titulo;
         t.getContenidos().remove(c);
         return "Contenido deleted: " + titulo;
     }
-
-    // ========== HELPER FINDERS ==========
-
-    // For login usage:
+    
+    // --- HELPER FINDER METHODS ---
+    
     private static Estudiante findStudentByUsername(String username) {
         for (Estudiante e : estudiantes) {
             if (e.getUsername() != null && e.getUsername().equalsIgnoreCase(username)) {
@@ -1179,6 +821,7 @@ public class J058CentroEstudios {
         }
         return null;
     }
+    
     private static Profesor findTeacherByUsername(String username) {
         for (Profesor p : profesores) {
             if (p.getUsername() != null && p.getUsername().equalsIgnoreCase(username)) {
@@ -1187,47 +830,51 @@ public class J058CentroEstudios {
         }
         return null;
     }
-
-    // For old usage:
+    
     private static Estudiante findEstudianteByName(String name) {
         for (Estudiante e : estudiantes) {
             if (e.getNombre().equalsIgnoreCase(name)) return e;
         }
         return null;
     }
+    
     private static Profesor findProfesorByName(String name) {
         for (Profesor p : profesores) {
             if (p.getNombre().equalsIgnoreCase(name)) return p;
         }
         return null;
     }
+    
     private static Curso findCursoByName(String name) {
         for (Curso c : cursos) {
             if (c.getNombre().equalsIgnoreCase(name)) return c;
         }
         return null;
     }
+    
     private static Asignatura findAsignaturaByName(String name) {
         for (Asignatura a : asignaturas) {
             if (a.getNombre().equalsIgnoreCase(name)) return a;
         }
         return null;
     }
+    
     private static Tema findTemaByName(Asignatura asig, String temaName) {
         for (Tema t : asig.getTemas()) {
             if (t.getNombre().equalsIgnoreCase(temaName)) return t;
         }
         return null;
     }
+    
     private static Contenido findContenidoByTitulo(Tema t, String titulo) {
         for (Contenido c : t.getContenidos()) {
             if (c.getTitulo().equalsIgnoreCase(titulo)) return c;
         }
         return null;
     }
-
-    // ========== WEBSOCKET FRAMING ==========
-
+    
+    // --- WEBSOCKET FRAMING METHODS ---
+    
     private static String createAcceptKey(String clientKey) {
         try {
             String magicGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -1238,16 +885,14 @@ public class J058CentroEstudios {
             throw new RuntimeException(e);
         }
     }
-
+    
     private static String readTextFrame(InputStream in) throws IOException {
         int b1 = in.read();
         if (b1 == -1) return null;
         int b2 = in.read();
         if (b2 == -1) return null;
-
         boolean masked = (b2 & 0x80) != 0;
         long payloadLen = (b2 & 0x7F);
-
         if (payloadLen == 126) {
             byte[] extended = new byte[2];
             if (in.read(extended) < 2) return null;
@@ -1256,16 +901,14 @@ public class J058CentroEstudios {
             byte[] extended = new byte[8];
             if (in.read(extended) < 8) return null;
             payloadLen = 0;
-            for (int i=0; i<8; i++) {
+            for (int i = 0; i < 8; i++) {
                 payloadLen = (payloadLen << 8) | (extended[i] & 0xFF);
             }
         }
-
         byte[] maskKey = new byte[4];
         if (masked) {
             if (in.read(maskKey) < 4) return null;
         }
-
         byte[] payloadData = new byte[(int) payloadLen];
         int totalRead = 0;
         while (totalRead < payloadLen) {
@@ -1273,30 +916,23 @@ public class J058CentroEstudios {
             if (r == -1) return null;
             totalRead += r;
         }
-
         if (masked) {
-            for (int i=0; i<payloadLen; i++) {
-                payloadData[i] = (byte)(payloadData[i] ^ maskKey[i % 4]);
+            for (int i = 0; i < payloadLen; i++) {
+                payloadData[i] = (byte) (payloadData[i] ^ maskKey[i % 4]);
             }
         }
-
         int opcode = (b1 & 0x0F);
         if (opcode == 8) {
             return null; // close frame
         } else if (opcode == 1) {
-            // text frame
             return new String(payloadData, "UTF-8");
         }
-        // ignoring other opcodes
         return null;
     }
-
+    
     private static void writeTextFrame(String message, OutputStream out) throws IOException {
         byte[] payload = message.getBytes("UTF-8");
-
-        // FIN + text opcode
-        out.write((byte)(0x80 | 0x1));
-        // no masking from server to client
+        out.write((byte)(0x80 | 0x1)); // FIN + text opcode
         if (payload.length <= 125) {
             out.write(payload.length);
         } else if (payload.length <= 65535) {
@@ -1317,5 +953,244 @@ public class J058CentroEstudios {
         }
         out.write(payload);
         out.flush();
+    }
+    
+    // --- DATABASE INITIALIZATION & SYNC ---
+    
+    private static void initDatabaseData() {
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            createTablesIfNeeded(conn);
+            // Load Estudiantes
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT nombre, edad, username, password FROM estudiantes")) {
+                while (rs.next()) {
+                    String nombre = rs.getString("nombre");
+                    int edad = rs.getInt("edad");
+                    String user = rs.getString("username");
+                    String pass = rs.getString("password");
+                    estudiantes.add(new Estudiante(nombre, edad, user, pass));
+                }
+            }
+            // Load Profesores
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT nombre, especialidad, username, password FROM profesores")) {
+                while (rs.next()) {
+                    String nombre = rs.getString("nombre");
+                    String esp = rs.getString("especialidad");
+                    String user = rs.getString("username");
+                    String pass = rs.getString("password");
+                    profesores.add(new Profesor(nombre, esp, user, pass));
+                }
+            }
+            // Load Cursos
+            try (Statement st = conn.createStatement();
+                 ResultSet rs = st.executeQuery("SELECT nombre, duracion FROM cursos")) {
+                while (rs.next()) {
+                    String cName = rs.getString("nombre");
+                    int dur = rs.getInt("duracion");
+                    cursos.add(new Curso(cName, dur));
+                }
+            }
+            System.out.println("Loaded from DB: " 
+                + estudiantes.size() + " estudiantes, "
+                + profesores.size()  + " profesores, "
+                + cursos.size()      + " cursos.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static void startDatabaseSyncThread() {
+        Thread t = new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(5000);
+                    syncDatabase();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                    break;
+                }
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+    }
+    
+    private static void syncDatabase() {
+        System.out.println("Syncing data to DB...");
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            dropTables(conn);
+            createTablesIfNeeded(conn);
+            insertAllData(conn);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private static void createTablesIfNeeded(Connection conn) throws SQLException {
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS estudiantes ("
+                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
+                           + "nombre VARCHAR(100), "
+                           + "edad INT, "
+                           + "username VARCHAR(100) UNIQUE, "
+                           + "password VARCHAR(100))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS profesores ("
+                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
+                           + "nombre VARCHAR(100), "
+                           + "especialidad VARCHAR(100), "
+                           + "username VARCHAR(100) UNIQUE, "
+                           + "password VARCHAR(100))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS cursos ("
+                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
+                           + "nombre VARCHAR(100) UNIQUE, "
+                           + "duracion INT)");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS asignaturas ("
+                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
+                           + "nombre VARCHAR(100) UNIQUE, "
+                           + "curso_id INT, "
+                           + "FOREIGN KEY (curso_id) REFERENCES cursos(id))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS temas ("
+                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
+                           + "nombre VARCHAR(100), "
+                           + "asignatura_id INT, "
+                           + "FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS contenidos ("
+                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
+                           + "titulo VARCHAR(100), "
+                           + "texto TEXT, "
+                           + "tema_id INT, "
+                           + "FOREIGN KEY (tema_id) REFERENCES temas(id))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS estudiante_asignatura ("
+                           + "estudiante_id INT, "
+                           + "asignatura_id INT, "
+                           + "PRIMARY KEY (estudiante_id, asignatura_id), "
+                           + "FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id), "
+                           + "FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS profesor_asignatura ("
+                           + "profesor_id INT, "
+                           + "asignatura_id INT, "
+                           + "PRIMARY KEY (profesor_id, asignatura_id), "
+                           + "FOREIGN KEY (profesor_id) REFERENCES profesores(id), "
+                           + "FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id))");
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS administradores ("
+                           + "id INT AUTO_INCREMENT PRIMARY KEY, "
+                           + "nombre VARCHAR(100), "
+                           + "email VARCHAR(100), "
+                           + "username VARCHAR(100) UNIQUE, "
+                           + "password VARCHAR(100))");
+            try (PreparedStatement checkPs = conn.prepareStatement(
+                 "SELECT COUNT(*) FROM administradores WHERE username = ?")) {
+                checkPs.setString(1, "jocarsa");
+                try (ResultSet rs = checkPs.executeQuery()) {
+                    if (rs.next() && rs.getInt(1) == 0) {
+                        try (PreparedStatement ps = conn.prepareStatement(
+                             "INSERT INTO administradores (nombre, email, username, password) VALUES (?,?,?,?)")) {
+                            ps.setString(1, "Jose Vicente Carratala");
+                            ps.setString(2, "info@josevicentecarratala");
+                            ps.setString(3, "jocarsa");
+                            ps.setString(4, "jocarsa");
+                            ps.executeUpdate();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private static void dropTables(Connection conn) throws SQLException {
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("DROP TABLE IF EXISTS estudiante_asignatura");
+            st.executeUpdate("DROP TABLE IF EXISTS profesor_asignatura");
+            st.executeUpdate("DROP TABLE IF EXISTS contenidos");
+            st.executeUpdate("DROP TABLE IF EXISTS temas");
+            st.executeUpdate("DROP TABLE IF EXISTS asignaturas");
+            st.executeUpdate("DROP TABLE IF EXISTS estudiantes");
+            st.executeUpdate("DROP TABLE IF EXISTS profesores");
+            st.executeUpdate("DROP TABLE IF EXISTS cursos");
+        }
+    }
+    
+    private static void insertAllData(Connection conn) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO estudiantes (nombre, edad, username, password) VALUES (?,?,?,?)")) {
+            for (Estudiante e : estudiantes) {
+                ps.setString(1, e.getNombre());
+                ps.setInt(2, e.getEdad());
+                ps.setString(3, e.getUsername());
+                ps.setString(4, e.getPassword());
+                ps.executeUpdate();
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO profesores (nombre, especialidad, username, password) VALUES (?,?,?,?)")) {
+            for (Profesor p : profesores) {
+                ps.setString(1, p.getNombre());
+                ps.setString(2, p.getEspecialidad());
+                ps.setString(3, p.getUsername());
+                ps.setString(4, p.getPassword());
+                ps.executeUpdate();
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO cursos (nombre, duracion) VALUES (?,?)")) {
+            for (Curso c : cursos) {
+                ps.setString(1, c.getNombre());
+                ps.setInt(2, c.getDuracionEnHoras());
+                ps.executeUpdate();
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO asignaturas (nombre, curso_id) VALUES (?,?)")) {
+            for (Asignatura a : asignaturas) {
+                ps.setString(1, a.getNombre());
+                // Note: Here you would normally lookup the actual course id.
+                ps.setInt(2, 0); // Placeholder
+                ps.executeUpdate();
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO temas (nombre, asignatura_id) VALUES (?,?)")) {
+            for (Asignatura a : asignaturas) {
+                for (Tema t : a.getTemas()) {
+                    ps.setString(1, t.getNombre());
+                    ps.setInt(2, 0); // Placeholder
+                    ps.executeUpdate();
+                }
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO contenidos (titulo, texto, tema_id) VALUES (?,?,?)")) {
+            for (Asignatura a : asignaturas) {
+                for (Tema t : a.getTemas()) {
+                    for (Contenido c : t.getContenidos()) {
+                        ps.setString(1, c.getTitulo());
+                        ps.setString(2, c.getTexto());
+                        ps.setInt(3, 0); // Placeholder
+                        ps.executeUpdate();
+                    }
+                }
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO estudiante_asignatura (estudiante_id, asignatura_id) VALUES (?,?)")) {
+            for (Asignatura a : asignaturas) {
+                for (Estudiante e : a.getEstudiantes()) {
+                    ps.setInt(1, 0); // Placeholder
+                    ps.setInt(2, 0); // Placeholder
+                    ps.executeUpdate();
+                }
+            }
+        }
+        try (PreparedStatement ps = conn.prepareStatement(
+             "INSERT INTO profesor_asignatura (profesor_id, asignatura_id) VALUES (?,?)")) {
+            for (Asignatura a : asignaturas) {
+                for (Profesor p : a.getProfesores()) {
+                    ps.setInt(1, 0); // Placeholder
+                    ps.setInt(2, 0); // Placeholder
+                    ps.executeUpdate();
+                }
+            }
+        }
     }
 }
